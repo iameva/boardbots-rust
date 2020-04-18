@@ -1,0 +1,98 @@
+mod quoridor;
+
+use quoridor::*;
+use std::io::{self, Read, Write};
+
+extern crate nom;
+use nom::{
+    branch::alt,
+    bytes::complete::{tag, take_while, take_while_m_n},
+    character::complete::{char, space1},
+    combinator::map_res,
+    named,
+    sequence::tuple,
+    IResult,
+};
+
+fn is_digit(c: char) -> bool {
+    c.is_digit(10)
+}
+
+fn coordinate(input: &str) -> IResult<&str, u8> {
+    map_res(take_while_m_n(1, 1, is_digit), |s| {
+        u8::from_str_radix(s, 10)
+    })(input)
+}
+
+fn orientation(input: &str) -> IResult<&str, Orientation> {
+    let (input, c) = alt((char('h'), char('v')))(input)?;
+    match c {
+        'h' => Ok((input, Orientation::Horizontal)),
+        'v' => Ok((input, Orientation::Vertical)),
+        _ => unreachable!(),
+    }
+}
+
+fn wall_move(input: &str) -> IResult<&str, Move> {
+    let (input, (_, _, x, _, y, _, o)) = tuple((
+            tag("wall"),
+            space1,
+            coordinate,
+            space1,
+            coordinate,
+            space1,
+            orientation,
+            ))(input)?;
+    Ok((input, Move::Wall(Position { x, y }, o)))
+}
+
+fn pawn_move(input: &str) -> IResult<&str, Move> {
+    let (input, (_, _, x, _, y)) =
+        tuple((tag("pawn"), space1, coordinate, space1, coordinate))(input)?;
+    Ok((input, Move::Pawn(Position { x, y })))
+}
+
+fn parse_move(input: &str) -> IResult<&str, Move> {
+    alt((wall_move, pawn_move))(input)
+}
+
+fn main() {
+    let mut game = Game {
+        players: vec![
+            Player {
+                wallsRemaining: 10,
+                tpe: PlayerType::A,
+            },
+            Player {
+                wallsRemaining: 10,
+                tpe: PlayerType::B,
+            },
+        ],
+        walls: vec![],
+        turns: 0,
+    };
+
+    let mut quit: bool = false;
+    while !quit {
+        let mut buffer = String::new();
+        print!("\n> ");
+        io::stdout().flush().unwrap();
+        io::stdin().read_line(&mut buffer);
+        println!("{}", buffer);
+        match buffer.trim() {
+            "exit" | "quit" | "q" => {
+                quit = true;
+            }
+            line => match parse_move(line) {
+                Ok((_, m)) => {
+                    println!("move: {:?}", m);
+                }
+                error => {
+                    println!("{:?}", error);
+                }
+            },
+        }
+    }
+
+    return;
+}
